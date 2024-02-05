@@ -43,6 +43,8 @@ def initialize_parameters(layer_dimensions):
     for i in range(len(layer_dimensions)-1):
         parameters["W" + str(i+1)] = np.random.randn(layer_dimensions[i+1], layer_dimensions[i]) * 0.01
         parameters["b" + str(i+1)] = np.zeros((layer_dimensions[i+1], 1))
+
+        print("W" + str(i+1), parameters["W" + str(i+1)].shape)
     
     return parameters
 
@@ -56,7 +58,7 @@ def sigmoid(Z):
     return 1 / (1 + np.exp(-Z)), Z # (A, cache = Z)
 
 def relu(Z):
-    return max(Z, 0), Z # (A, cache = Z)
+    return np.max(Z, 0), Z # (A, cache = Z)
 
 def linear_activation_forward(A, W, b, activation):
     Z, linear_cache = linear_forward(A, W, b)
@@ -183,7 +185,7 @@ def model(X, Y, layer_dimensions, learning_rate = 0.005, iterations = 3000, loss
         elif loss_function == 'log':
             cost = log_cost(AL, Y)
 
-        gradients = model_backward(AL, caches)
+        gradients = model_backward(AL, Y, caches)
         parameters = update_parameters(parameters, gradients, learning_rate)
 
         if iterations % 100 == 0 or i == iterations:
@@ -194,18 +196,26 @@ def model(X, Y, layer_dimensions, learning_rate = 0.005, iterations = 3000, loss
 
 # preprocess data
 
-# load X
-# load Y
-            
-print(fen_to_input_vector("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1"))
-            
+df = pd.read_csv("data/small_input.csv")
+
+X_as_FEN = np.array( df.iloc[:, 0] )
+X = np.array ([fen_to_input_vector(row) for row in X_as_FEN])
+X = X.reshape(449, 99)
+
+Y = np.array( df.iloc[:, 1] )
+Y = Y.reshape(1, 99)
+
+
+print('X ', X.shape)
+print('Y ', Y.shape)
+
 # divide into the training set and the test set
 
-layer_dimensions = (448, 20, 15, 1)
-# model(
-#     X=,
-#     Y=
-#     layer_dimensions=layer_dimensions,
-#     iterations=2000,
-#     loss_function='L2' # or 'log'
-# )
+layer_dimensions = (449, 20, 15, 1)
+model(
+    X=X,
+    Y=Y,
+    layer_dimensions=layer_dimensions,
+    iterations=2000,
+    loss_function='L2' # or 'log'
+)
