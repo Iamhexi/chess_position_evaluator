@@ -3,6 +3,9 @@ import numpy as np
 import pandas as pd
 import chess
 
+# global variable, do not change
+max = 0
+
 # fen - string in the FEN chess notation
 def fen_to_input_vector(fen): 
     board = chess.Board(fen)
@@ -37,6 +40,17 @@ def fen_to_input_vector(fen):
     vec = np.array(board_array)
     return vec.reshape((449, 1)) # check readme.md for a detalied explanation
 
+def normalize(Y):
+    
+    max_val = Y.max()
+    
+    # update global variable
+    global max
+    max = max_val
+
+    Y_normalized = Y / max_val
+    return Y_normalized
+
 
 def initialize_parameters(layer_dimensions):
     parameters = {}
@@ -49,7 +63,7 @@ def initialize_parameters(layer_dimensions):
     return parameters
 
 def linear_forward(A, W, b):
-    Z = np.dot(A, W) + b
+    Z = np.dot(A.T, W.T).T + b
     cache = (A, W, b)
 
     return Z, cache
@@ -58,7 +72,7 @@ def sigmoid(Z):
     return 1 / (1 + np.exp(-Z)), Z # (A, cache = Z)
 
 def relu(Z):
-    return np.max(Z, 0), Z # (A, cache = Z)
+    return np.maximum(Z, 0), Z # (A, cache = Z)
 
 def linear_activation_forward(A, W, b, activation):
     Z, linear_cache = linear_forward(A, W, b)
@@ -83,9 +97,10 @@ def model_forward(X, parameters):
         A, cache = linear_activation_forward(A_prev, parameters["W" + str(i)], parameters["b" + str(i)], 'relu')
         caches.append(cache)
 
-    linear_activation_forward(A, parameters[f'W{L}'], parameters[f'W{L}'], 'sigmoid')
+    AL, cache = linear_activation_forward(A, parameters[f'W{L}'], parameters[f'b{L}'], 'sigmoid')
+    caches.append(cache)
 
-    return A, caches
+    return AL, caches
 
 def log_cost(Y_hat, Y): # Y_hat is the activation value of the last layer
     number_of_training_examples = Y.shape[1] # number of training examples also called `m`
@@ -111,10 +126,12 @@ def linear_backward(dZ, cache):
 
 
 def sigmoid_derivative(Z):
-    return sigmoid(Z) * (1 - sigmoid(Z)) # not dot product as it would sum the values at the end
+    sigmoid_result = sigmoid(Z)[0]
+    return sigmoid_result * (1 - sigmoid_result) # not dot product as it would sum the values at the end
 
 def sigmoid_backward(dA, activation_cache): # activation cache from the sigmoid function call
     Z = activation_cache
+    Z = np.clip(Z, -500, 500)
     dZ = dA * sigmoid_derivative(Z)
     return dZ
 
@@ -129,18 +146,16 @@ def relu_backward(dA, activation_cache):
 def linear_activation_backward(dA, cache, activation):
     linear_cache, activation_cache = cache
 
-    if activation_cache == 'relu':
+    if activation == 'relu':
         dZ = relu_backward(dA, activation_cache)
-        return linear_backward(dZ, linear_cache)
+    elif activation == 'sigmoid':
+        dZ = sigmoid_backward(dA, activation_cache)
 
-    elif activation_cache == 'sigmoid':
-        dZ = relu_backward(dA, activation_cache)
-        return linear_backward(dZ, linear_cache)
-    
+    return linear_backward(dZ, linear_cache)
     # returns dA_prev, dW, db from linear_backward function
 
 def model_backward(AL, Y, caches):
-    dAL = - (np.divide(Y, AL) - np.divide(1 - Y, 1 - AL)) # derivative of cost with respect to AL
+    dAL = - (np.divide(Y, AL) - np.divide(1 - Y, 1 - AL + 1e-8)) # derivative of cost with respect to AL
     grads = {}
     L = len(caches)
     m = AL.shape[1]
@@ -174,7 +189,20 @@ def update_parameters(params, gradients, learning_rate):
 
     return parameters
 
-def model(X, Y, layer_dimensions, learning_rate = 0.005, iterations = 3000, loss_function='L2'):
+
+def predict(fen_position, parameters):
+
+    fen_position = fen_to_input_vector(fen_position)
+    
+    # Forward pass through the model to get the prediction
+    AL, _ = model_forward(np.array(fen_position).reshape(449, 1), parameters)
+    
+    prediction = AL.squeeze() * max # restore original value
+    prediction = round(prediction, 2)
+    return prediction
+
+
+def model(X, Y, layer_dimensions, learning_rate = 0.05, iterations = 3000, loss_function='L2'):
     parameters = initialize_parameters(layer_dimensions)
     
     for i in range(iterations):
@@ -187,35 +215,49 @@ def model(X, Y, layer_dimensions, learning_rate = 0.005, iterations = 3000, loss
 
         gradients = model_backward(AL, Y, caches)
         parameters = update_parameters(parameters, gradients, learning_rate)
+        
 
-        if iterations % 100 == 0 or i == iterations:
-            cost = np.square(cost)
+        if i % 100 == 0 or i == iterations:
+            cost = round(cost, 2)
             print(f'Cost for {i} iteration: {cost}')
 
+    fen = "r4bk1/ppp2rpp/2n5/3qp3/6b1/2n5/PP3PPP/RNBQKB1R w KQq - 0 1"
+    print(f'For \'{fen}\' the centipawn evaluation is: ', predict(fen, parameters))
 
+
+
+# adjust according to train set
+number_of_training_examples = 10_000 - 1
+
+# tune the model
+learning_rate = 0.0095
+iterations = 2000
+loss_function = 'L2' # or 'log'
 
 # preprocess data
-
-df = pd.read_csv("data/small_input.csv")
+df = pd.read_csv("data/medium_input.csv")
 
 X_as_FEN = np.array( df.iloc[:, 0] )
 X = np.array ([fen_to_input_vector(row) for row in X_as_FEN])
-X = X.reshape(449, 99)
+X = X.reshape(449, number_of_training_examples)
 
 Y = np.array( df.iloc[:, 1] )
-Y = Y.reshape(1, 99)
+Y = Y.reshape(1, number_of_training_examples)
+Y = normalize(Y)
 
+# Printing shapes, uncomment for debugging
+# print('X ', X.shape)
+# print('Y ', Y.shape)
 
-print('X ', X.shape)
-print('Y ', Y.shape)
+# TODO: divide into the training set and the test set
 
-# divide into the training set and the test set
-
+# deploy model
 layer_dimensions = (449, 20, 15, 1)
 model(
     X=X,
     Y=Y,
     layer_dimensions=layer_dimensions,
-    iterations=2000,
-    loss_function='L2' # or 'log'
+    iterations=iterations,
+    loss_function=loss_function,
+    learning_rate=learning_rate 
 )
