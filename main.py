@@ -1,9 +1,41 @@
 import copy
 import numpy as np
-# import pandas as pd
+import pandas as pd
+import chess
 
-# This is a neural network chess position evaluator.
-# 7 encoding per square, 64 square -> 7 * 64 = 448
+# fen - string in the FEN chess notation
+def fen_to_input_vector(fen): 
+    board = chess.Board(fen)
+    board_array = []
+
+    for i in range(8):
+        for j in range(8):
+            square = chess.square(j, i)
+
+            piece = board.piece_at( square )
+
+            if piece is None:
+                indexOfOne = 0
+            else:
+                indexOfOne = (int) (piece.piece_type) # as piece type's numeric values correspond to position in the binary vector
+            
+
+            for k in range(7):
+                if k == indexOfOne:
+                    board_array.append(True)
+                else:
+                    board_array.append(False)
+
+
+
+
+    if board.turn == chess.WHITE:
+        board_array.append(True)
+    else:
+        board_array.append(False)
+
+    vec = np.array(board_array)
+    return vec.reshape((449, 1)) # check readme.md for a detalied explanation
 
 
 def initialize_parameters(layer_dimensions):
@@ -164,6 +196,8 @@ def model(X, Y, layer_dimensions, learning_rate = 0.005, iterations = 3000, loss
 
 # load X
 # load Y
+            
+print(fen_to_input_vector("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1"))
             
 # divide into the training set and the test set
 
